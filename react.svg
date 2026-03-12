@@ -1,0 +1,68 @@
+import type { Skin } from '../types/game';
+
+export const skins: Skin[] = [
+  {
+    id: 'default',
+    name: 'Default',
+    color: '#60a5fa',
+    pattern: 'solid',
+    price: 0,
+    rarity: 'common'
+  },
+  {
+    id: 'neon',
+    name: 'Neon Blue',
+    color: '#00ffff',
+    pattern: 'glow',
+    price: 300,
+    rarity: 'common'
+  },
+  {
+    id: 'golden',
+    name: 'Golden',
+    color: '#ffd700',
+    pattern: 'metallic',
+    price: 1000,
+    rarity: 'rare'
+  },
+  {
+    id: 'shadow',
+    name: 'Shadow',
+    color: '#1a1a2e',
+    pattern: 'dark',
+    price: 800,
+    rarity: 'rare'
+  },
+  {
+    id: 'plasma',
+    name: 'Plasma',
+    color: '#ff00ff',
+    pattern: 'energy',
+    price: 2500,
+    rarity: 'epic'
+  },
+  {
+    id: 'dragon',
+    name: 'Dragon Fire',
+    color: '#ff4500',
+    pattern: 'flames',
+    price: 4000,
+    rarity: 'epic'
+  },
+  {
+    id: 'cosmic',
+    name: 'Cosmic Void',
+    color: '#8b5cf6',
+    pattern: 'galaxy',
+    price: 6000,
+    rarity: 'legendary'
+  },
+  {
+    id: 'rainbow',
+    name: 'Rainbow',
+    color: 'rainbow',
+    pattern: 'pride',
+    price: 10000,
+    rarity: 'legendary'
+  }
+];

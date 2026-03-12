@@ -1,0 +1,293 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  },
+  transports: ['websocket', 'polling']
+});
+
+// Game state
+const rooms = new Map();
+const playerData = new Map(); // Store player data (coins, inventory, etc.)
+
+class GameRoom {
+  constructor(roomId) {
+    this.roomId = roomId;
+    this.players = new Map();
+    this.projectiles = [];
+    this.powerUps = [];
+    this.lastUpdate = Date.now();
+  }
+
+  addPlayer(socketId, playerData) {
+    this.players.set(socketId, {
+      id: socketId,
+      ...playerData,
+      x: 400 + Math.random() * 200 - 100,
+      y: 300 + Math.random() * 200 - 100,
+      health: 100,
+      maxHealth: 100,
+      kills: 0,
+      deaths: 0,
+      lastShot: 0,
+      reloading: false
+    });
+    return this.players.get(socketId);
+  }
+
+  removePlayer(socketId) {
+    this.players.delete(socketId);
+  }
+
+  updatePlayer(socketId, data) {
+    const player = this.players.get(socketId);
+    if (player) {
+      Object.assign(player, data);
+    }
+  }
+
+  addProjectile(projectile) {
+    this.projectiles.push({
+      id: Date.now() + Math.random(),
+      ...projectile,
+      createdAt: Date.now()
+    });
+  }
+
+  spawnPowerUp() {
+    const types = ['health', 'speed', 'damage', 'ammo'];
+    this.powerUps.push({
+      id: Date.now() + Math.random(),
+      x: 50 + Math.random() * 700,
+      y: 50 + Math.random() * 500,
+      type: types[Math.floor(Math.random() * types.length)],
+      createdAt: Date.now()
+    });
+  }
+
+  checkCollisions() {
+    const now = Date.now();
+    const toRemove = [];
+
+    // Check projectile collisions
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const proj = this.projectiles[i];
+      const projOwner = this.players.get(proj.ownerId);
+
+      // Check if hit any player
+      for (const [socketId, player] of this.players) {
+        if (socketId === proj.ownerId) continue;
+
+        const dx = proj.x - player.x;
+        const dy = proj.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 25) {
+          // Hit!
+          player.health -= proj.damage;
+          
+          if (player.health <= 0) {
+            player.health = 0;
+            player.deaths++;
+            player.x = 400 + Math.random() * 200 - 100;
+            player.y = 300 + Math.random() * 200 - 100;
+            player.health = 100;
+            
+            if (projOwner) {
+              projOwner.kills++;
+            }
+            
+            // Spawn power-up
+            this.spawnPowerUp();
+          }
+
+          toRemove.push(i);
+          break;
+        }
+      }
+
+      // Remove old projectiles
+      if (now - proj.createdAt > 3000) {
+        toRemove.push(i);
+      }
+    }
+
+    // Remove collided/old projectiles
+    for (const index of toRemove.sort((a, b) => b - a)) {
+      this.projectiles.splice(index, 1);
+    }
+
+    // Check power-up pickups
+    const powerUpToRemove = [];
+    for (let i = this.powerUps.length - 1; i >= 0; i--) {
+      const powerUp = this.powerUps[i];
+      
+      for (const [socketId, player] of this.players) {
+        const dx = powerUp.x - player.x;
+        const dy = powerUp.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 30) {
+          // Picked up!
+          switch (powerUp.type) {
+            case 'health':
+              player.health = Math.min(player.maxHealth, player.health + 30);
+              break;
+            case 'ammo':
+              // Handled client-side
+              break;
+            case 'damage':
+              // Handled client-side
+              break;
+          }
+          powerUpToRemove.push(i);
+          break;
+        }
+      }
+
+      // Remove old power-ups
+      if (now - powerUp.createdAt > 10000) {
+        powerUpToRemove.push(i);
+      }
+    }
+
+    for (const index of powerUpToRemove.sort((a, b) => b - a)) {
+      this.powerUps.splice(index, 1);
+    }
+  }
+
+  getState() {
+    return {
+      players: Array.from(this.players.values()),
+      projectiles: this.projectiles,
+      powerUps: this.powerUps
+    };
+  }
+}
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('Player connected:', socket.id);
+
+  // Join game
+  socket.on('join_game', (data) => {
+    const { roomId, playerName, weapon, skin } = data;
+    
+    let room = rooms.get(roomId);
+    if (!room) {
+      room = new GameRoom(roomId);
+      rooms.set(roomId, room);
+    }
+
+    const player = room.addPlayer(socket.id, {
+      name: playerName || `Player${socket.id.slice(-4)}`,
+      weapon,
+      skin
+    });
+
+    socket.join(roomId);
+
+    // Send initial state
+    socket.emit('game_joined', {
+      playerId: socket.id,
+      gameState: room.getState()
+    });
+
+    // Notify others
+    socket.to(roomId).emit('player_joined', player);
+  });
+
+  // Update player position
+  socket.on('player_update', (data) => {
+    for (const [roomId, room] of rooms) {
+      if (room.players.has(socket.id)) {
+        room.updatePlayer(socket.id, data);
+        socket.to(roomId).emit('player_updated', {
+          playerId: socket.id,
+          ...data
+        });
+        break;
+      }
+    }
+  });
+
+  // Player shoots
+  socket.on('player_shoot', (data) => {
+    for (const [roomId, room] of rooms) {
+      if (room.players.has(socket.id)) {
+        room.addProjectile({
+          ownerId: socket.id,
+          ...data
+        });
+        
+        // Broadcast to all in room
+        io.to(roomId).emit('projectile_fired', {
+          ownerId: socket.id,
+          ...data
+        });
+        break;
+      }
+    }
+  });
+
+  // Get room list
+  socket.on('get_rooms', () => {
+    const roomList = [];
+    for (const [roomId, room] of rooms) {
+      roomList.push({
+        roomId,
+        playerCount: room.players.size
+      });
+    }
+    socket.emit('rooms_list', roomList);
+  });
+
+  // Disconnect
+  socket.on('disconnect', () => {
+    console.log('Player disconnected:', socket.id);
+    
+    for (const [roomId, room] of rooms) {
+      if (room.players.has(socket.id)) {
+        room.removePlayer(socket.id);
+        socket.to(roomId).emit('player_left', { playerId: socket.id });
+        
+        // Remove empty rooms
+        if (room.players.size === 0) {
+          rooms.delete(roomId);
+        }
+        break;
+      }
+    }
+  });
+});
+
+// Game loop - run at 60 ticks per second
+setInterval(() => {
+  const now = Date.now();
+  
+  for (const [roomId, room] of rooms) {
+    room.checkCollisions();
+    
+    // Send updated state to all players in room
+    io.to(roomId).emit('game_state', room.getState());
+  }
+}, 16); // ~60 FPS
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', rooms: rooms.size, players: Array.from(rooms.values()).reduce((acc, room) => acc + room.players.size, 0) });
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Neon Strike server running on port ${PORT}`);
+});

@@ -1,0 +1,63 @@
+🎮 NEON STRIKE - HOW TO GET YOUR CODE
+=========================================
+
+All your code is already in the workspace! Here's how to get it:
+
+METHOD 1: Copy Files from Workspace (EASIEST)
+---------------------------------------------
+1. Look at the "Files" panel on the left side
+2. Click on each file to see its content
+3. Copy the content
+4. Create the same file on your computer
+5. Paste the content
+
+METHOD 2: Download Individual Files
+---------------------------------
+1. In the Files panel, right-click any file
+2. Select "Download" (if available)
+3. Save to your computer
+
+METHOD 3: Use Git (BEST FOR DEPLOYMENT)
+---------------------------------------
+1. Open terminal/command prompt on your computer
+2. Navigate to where you want the project:
+   cd /path/to/your/projects
+3. Copy the entire src/ and server/ folders from workspace
+4. Or use the files panel to copy each file
+
+WHAT YOU NEED TO COPY:
+--------------------
+✅ src/ folder (all subfolders and files)
+✅ server/ folder (all files)
+✅ package.json
+✅ package-lock.json
+✅ tsconfig.json, tsconfig.app.json, tsconfig.node.json
+✅ vite.config.ts
+✅ index.html
+✅ .gitignore
+✅ .env.example
+✅ README.md
+✅ DEPLOYMENT_GUIDE.md
+✅ MULTIPLAYER_GUIDE.md
+
+DON'T COPY:
+-----------
+❌ node_modules/ (will install with npm install)
+❌ dist/ (will build with npm run build)
+❌ .vercel/ (auto-generated)
+
+AFTER COPYING:
+-------------
+1. Open terminal in your project folder
+2. Run: npm install
+3. Run: npm run dev
+4. Open http://localhost:5173
+
+READY TO DEPLOY:
+----------------
+1. Create GitHub repo
+2. Push code (see MULTIPLAYER_GUIDE.md)
+3. Deploy server to Render
+4. Deploy frontend to Vercel
+
+That's it! 🎉
